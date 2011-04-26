@@ -12,6 +12,8 @@ class wikilearn:
         self.db = self.connection[db]
 
     def get_data(self,url,depth,replace):
+        print 'Getting data for',url
+
         if depth == 0:
             return
 
@@ -28,7 +30,6 @@ class wikilearn:
             print 'Error',url,'not found'
 
     def download(self,url,replace):
-        time.sleep(4 + random.randint(0,4))
         insert = True
 
         articles = self.db['articles']
@@ -37,27 +38,45 @@ class wikilearn:
                 articles.remove({ 'url' : None })
                 articles.remove({ 'url' : url })
             else:
-                insert = False
+                article = articles.find_one({'url': url})
+                if article.get('text') is not None:
+                    insert = False
 
         if insert:
+            time.sleep(4 + random.randint(0,4))
             print 'Downloading',url
             opener = urllib2.build_opener()
             opener.addheaders = [('User-agent', 'Mozilla/5.0')]
             f = opener.open(url)
             articles.insert({ 'date': datetime.datetime.utcnow(),
                               'url' : url,
-                              'text': f.read() }
-                            )
+                              'text': f.read()
+                              })
 
     def process_article(self, url):
         articles = self.db['articles']
-
         article = articles.find_one({'url':url})
         if article is not None:
             text = article.get('text')
             if article.get('links') is None:
                 links = self.extract_links(text)
                 articles.update({'url': url},{'$set':{'links':links}})
+            links = article.get('links')
+            for link,cnt in links.items():
+                to_article = articles.find_one({'url':link})
+                if to_article is not None:
+                    to_links = to_article.get('to_links')
+                    if to_links is not None:
+                        to_links.append(url)
+                        to_links = list(set(to_links))
+                    else:
+                        to_links = [ url ]
+                    articles.update({'url': link},{'$set':{'to_links':to_links}})
+                else:
+                    articles.insert({ 'date': datetime.datetime.utcnow(),
+                                      'url' : link,
+                                      'to_links' : [ url ]
+                                      })
         else:
             print 'No such article'
 
