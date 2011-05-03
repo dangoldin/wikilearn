@@ -102,14 +102,16 @@ class wikilearn:
             articles = self.db['articles']
             for article in articles.find():
                 pr = 0.15
-                for link in article.get('to_links'):
-                    la = articles.find_one({'url':link})
-                    if la is not None:
-                        score = la.get('score',1.0)
-                        num_links = len(la.get('links'))
-                        pr += 0.85 * (score/num_links)
-                articles.update({'url': article.get('url')},{'$set':{'score':pr}})
-                print article.get('url'),':',pr
+                links = article.get('to_links')
+                if links is not None:
+                    for link in links:
+                        la = articles.find_one({'url':link})
+                        if la is not None:
+                            score = la.get('score',1.0)
+                            num_links = len(la.get('links'))
+                            pr += 0.85 * (score/num_links)
+                    articles.update({'url': article.get('url')},{'$set':{'score':pr}})
+                    print article.get('url'),':',pr
 
     def print_db(self):
         print 'DB Contents:'
