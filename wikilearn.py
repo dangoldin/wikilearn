@@ -96,6 +96,21 @@ class wikilearn:
         print 'Retrieved',len(links),'links'
         return links
 
+    def pagerank(self,iterations=10):
+        for i in range(iterations):
+            print 'Iteration',i
+            articles = self.db['articles']
+            for article in articles.find():
+                pr = 0.15
+                for link in article.get('to_links'):
+                    la = articles.find_one({'url':link})
+                    if la is not None:
+                        score = la.get('score',1.0)
+                        num_links = len(la.get('links'))
+                        pr += 0.85 * (score/num_links)
+                articles.update({'url': article.get('url')},{'$set':{'score':pr}})
+                print article.get('url'),':',pr
+
     def print_db(self):
         print 'DB Contents:'
         for a in self.db['articles'].find():
@@ -106,9 +121,13 @@ class wikilearn:
 
 if __name__ == '__main__':
     url = 'http://en.wikipedia.org/wiki/American_Revolution'
-    depth = 6
+    depth = 5
     replace = False
     w = wikilearn('localhost', 27017, 'wikilearn')
+
+    w.pagerank()
+    exit()
+
     w.get_data(url,depth,replace)
     #w.download(url, False)
     w.process_article(url)
