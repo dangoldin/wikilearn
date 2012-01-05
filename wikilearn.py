@@ -1,5 +1,10 @@
 import datetime, urllib2, time, random
+
 from pymongo import Connection
+from bson import BSON
+import base64
+#from bson.son import SON
+
 from BeautifulSoup import BeautifulSoup
 from collections import defaultdict
 
@@ -24,8 +29,10 @@ class wikilearn:
         article = articles.find_one({'url':url})
         if article is not None:
             links = article.get('links')
-            for link in links:
-                self.get_data(link,depth-1,replace)
+            if links is not None:
+                for link in links.items():
+                    link = base64.b64decode(link[0])
+                    self.get_data(link,depth-1,replace)
         else:
             print 'Error',url,'not found'
 
@@ -60,10 +67,14 @@ class wikilearn:
             text = article.get('text')
             if article.get('links') is None:
                 links = self.extract_links(text)
-                articles.update({'url': url},{'$set':{'links':links}})
-            links = article.get('links')
+                print 'Inserting links', links
+                articles.update( {'url': url}, {'$set': { 'links': links }} )
+            else:
+                links = article.get('links')
+
             for link,cnt in links.items():
-                to_article = articles.find_one({'url':link})
+                link = base64.b64decode(link)
+                to_article = articles.find_one( {'url':link} )
                 if to_article is not None:
                     to_links = to_article.get('to_links')
                     if to_links is not None:
@@ -82,17 +93,23 @@ class wikilearn:
 
     def extract_links(self,text):
         base_url = 'http://en.wikipedia.org'
-        links = defaultdict(int)
+        links = {}
         soup = BeautifulSoup(text)
         for link in soup.findAll('a'):
-            if '/wiki/' in link.get('href','') and ':' not in link.get('href') and 'http' not in link.get('href'):
+            if '/wiki/' in link.get('href','') and ':' not in link.get('href') and 'http' not in link.get('href') and '//' not in link.get('href') and 'Main_Page' not in link.get('href'):
                 link = link.get('href')
+                print link
                 hash_loc = link.find('#')
                 if hash_loc >= 0:
                     link = link[:hash_loc]
                 if 'http' not in link:
                     link = base_url + link
-                links[link] += 1
+                
+                link = base64.b64encode(link)
+                try:
+                    links[link] += 1
+                except:
+                    links[link] = 1
         print 'Retrieved',len(links),'links'
         return links
 
@@ -111,24 +128,28 @@ class wikilearn:
                             num_links = len(la.get('links'))
                             pr += 0.85 * (score/num_links)
                     articles.update({'url': article.get('url')},{'$set':{'score':pr}})
-                    print article.get('url'),':',pr
+                    if random.randint(0,100) == 0:
+                        print article.get('url'),':',pr
 
     def print_db(self):
         print 'DB Contents:'
         for a in self.db['articles'].find():
-            print a.get('url'),len(a.get('links'))
-            for link in a.get('links'):
+            print a.get('url'),len(a.get('links',[]))
+            for link in a.get('links',[]):
                 print link
-                exit()
+        print 'Done printing'
 
 if __name__ == '__main__':
-    url = 'http://en.wikipedia.org/wiki/American_Revolution'
-    depth = 5
-    replace = False
+    #url = 'http://en.wikipedia.org/wiki/American_Revolution'
+    url = 'http://en.wikipedia.org/wiki/William_H._Lamport'
+    depth = 3
+    replace = True
     w = wikilearn('localhost', 27017, 'wikilearn')
 
-    w.pagerank()
-    exit()
+    w.print_db()
+
+    #w.pagerank()
+    #exit()
 
     w.get_data(url,depth,replace)
     #w.download(url, False)
